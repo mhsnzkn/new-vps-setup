@@ -1,0 +1,11 @@
+# Per-server config — contains real values and possibly a password.
+# Commit config/server.env.example instead.
+config/server.env
+
+# macOS / editor noise
+.DS_Store
+*.swp
+*~
+
+# Local state markers if ever created outside /var/lib
+*.done
