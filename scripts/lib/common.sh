@@ -24,10 +24,21 @@ require_root() {
 
 # Ask a yes/no question. Returns 0 for yes, 1 for no.
 # Usage: if confirm "Continue?"; then ... fi
+#
+# Reads from /dev/tty explicitly, not plain stdin. This matters when
+# this script is executed by piping/streaming it in (e.g. deploy.sh's
+# remote mode) — in that case stdin is busy carrying the script itself,
+# and a plain `read` would consume script bytes instead of waiting for
+# the operator to type an answer. /dev/tty is the actual terminal
+# regardless of how the script arrived.
 confirm() {
   local prompt="${1:-Continue?}"
   local answer
-  read -r -p "${prompt} [y/N] " answer
+  if [[ -r /dev/tty ]]; then
+    read -r -p "${prompt} [y/N] " answer < /dev/tty
+  else
+    read -r -p "${prompt} [y/N] " answer
+  fi
   [[ "${answer,,}" == "y" || "${answer,,}" == "yes" ]]
 }
 

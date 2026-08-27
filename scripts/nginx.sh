@@ -1,33 +1,32 @@
 #!/usr/bin/env bash
 # Install and do a minimal setup of nginx as a reverse proxy in front
-# of Docker containers. Run manually — not part of 00-main.sh, since
-# not every server needs a web server.
+# of Docker containers. Not part of 00-main.sh, since not every server
+# needs a web server.
+#
+# Defines step_nginx() so this can be sourced/embedded and called
+# elsewhere (e.g. deploy.sh's remote streaming mode) without touching
+# disk. Running this file directly still works exactly as before.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/lib/common.sh"
+step_nginx() {
+  log "Installing nginx..."
+  apt install -y nginx
 
-require_root
-load_config
+  log "Ensuring nginx starts on boot..."
+  systemctl enable --now nginx
 
-log "Installing nginx..."
-apt install -y nginx
+  if command -v ufw &>/dev/null; then
+    log "Allowing 'Nginx Full' (80/tcp + 443/tcp) through UFW..."
+    ufw allow 'Nginx Full' || warn "Could not add UFW rule — check ports 80/443 manually."
+  fi
 
-log "Ensuring nginx starts on boot..."
-systemctl enable --now nginx
+  local site_available="/etc/nginx/sites-available/reverse-proxy.conf"
+  local site_enabled="/etc/nginx/sites-enabled/reverse-proxy.conf"
 
-if command -v ufw &>/dev/null; then
-  log "Allowing 'Nginx Full' (80/tcp + 443/tcp) through UFW..."
-  ufw allow 'Nginx Full' || warn "Could not add UFW rule — check ports 80/443 manually."
-fi
-
-SITE_AVAILABLE="/etc/nginx/sites-available/reverse-proxy.conf"
-SITE_ENABLED="/etc/nginx/sites-enabled/reverse-proxy.conf"
-
-if [[ -f "$SITE_AVAILABLE" ]]; then
-  warn "${SITE_AVAILABLE} already exists — leaving it alone."
-else
-  log "Writing a starter reverse-proxy config to ${SITE_AVAILABLE}..."
-  cat > "$SITE_AVAILABLE" <<'EOF'
+  if [[ -f "$site_available" ]]; then
+    warn "${site_available} already exists — leaving it alone."
+  else
+    log "Writing a starter reverse-proxy config to ${site_available}..."
+    cat > "$site_available" <<'EOF'
 # Starter reverse-proxy config.
 # Point this at a container published on localhost, e.g. via
 # `-p 127.0.0.1:3000:3000` in your docker run / compose file.
@@ -48,22 +47,22 @@ server {
     }
 }
 EOF
-  ln -sf "$SITE_AVAILABLE" "$SITE_ENABLED"
-fi
+    ln -sf "$site_available" "$site_enabled"
+  fi
 
-log "Testing nginx config..."
-if ! nginx -t; then
-  die "nginx -t reported an error. Fix ${SITE_AVAILABLE} before reloading."
-fi
+  log "Testing nginx config..."
+  if ! nginx -t; then
+    die "nginx -t reported an error. Fix ${site_available} before reloading."
+  fi
 
-systemctl reload nginx
+  systemctl reload nginx
 
-mark_done "nginx"
+  mark_done "nginx"
 
-cat <<EOF
+  cat <<EOF
 
 Next steps:
-  - Edit ${SITE_AVAILABLE}: set server_name to your real domain and
+  - Edit ${site_available}: set server_name to your real domain and
     proxy_pass to the container/port you're actually running.
   - Add TLS with certbot once DNS is pointed at this server:
       apt install -y certbot python3-certbot-nginx
@@ -71,4 +70,14 @@ Next steps:
 
 EOF
 
-log "nginx setup complete."
+  log "nginx setup complete."
+}
+
+# --- standalone runner (only runs when this file is executed directly) ---
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  source "$SCRIPT_DIR/lib/common.sh"
+  require_root
+  load_config
+  step_nginx
+fi

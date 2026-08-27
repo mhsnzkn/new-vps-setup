@@ -11,25 +11,29 @@
 
 ## Steps
 
-1. **Get the repo onto the server.**
-   ```
-   scp -r vps-hardening root@<server-ip>:/root/
-   ssh root@<server-ip>
-   ```
+This runbook assumes running via `deploy.sh` from your local machine
+(no upload needed — see README for how it works). If you'd rather log
+into the box and run scripts locally instead, copy the repo over
+first (`scp -r vps-hardening root@<server-ip>:/root/`, then `ssh` in)
+and substitute `sudo bash scripts/<step>.sh` wherever this runbook
+says `./deploy.sh ... <step>.sh`.
 
-2. **Configure.**
+1. **Configure — on your local machine**, inside this repo:
    ```
-   cd vps-hardening
    cp config/server.env.example config/server.env
    nano config/server.env
    ```
    At minimum set `NEW_USER`. Leave `NEW_USER_PASSWORD` blank to be
    prompted interactively rather than storing it in the file.
 
-3. **Run the main script.**
+2. **Run the main pass.**
    ```
-   sudo bash scripts/00-main.sh
+   ./deploy.sh root@<server-ip>
    ```
+   (or `./deploy.sh -i ~/.ssh/your_key root@<server-ip>` for a
+   specific key.) This builds and streams `00-main.sh` to the server —
+   nothing is uploaded first.
+
    It will ask, before each step, something like:
    ```
    Run '01-updates.sh' — Update packages and enable unattended-upgrades? [y/N]
@@ -38,7 +42,7 @@
    the next one. Skipping a step does not stop the run — you get asked
    about every step in order, and a summary of what ran vs. was
    skipped is printed at the end. You can always run a skipped step
-   later on its own, e.g. `sudo bash scripts/04-firewall.sh`.
+   later on its own, e.g. `./deploy.sh deploy@<server-ip> 04-firewall.sh`.
 
 4. **When it pauses after user creation** — open a *second* terminal,
    don't close the first:
@@ -80,7 +84,7 @@
 
 9. **If this server runs a reverse proxy**, run nginx separately:
    ```
-   sudo bash scripts/nginx.sh
+   ./deploy.sh deploy@<server-ip> nginx.sh
    ```
    Edit `/etc/nginx/sites-available/reverse-proxy.conf` afterwards to
    point at your actual domain and container port.
@@ -89,8 +93,12 @@
 
 ## Re-running a single step
 
-Every script under `scripts/` sources its own config and can be run
-standalone, e.g. to re-apply firewall rules on an existing box:
+From your local machine, no upload needed:
+```
+./deploy.sh deploy@<server-ip> 04-firewall.sh
+```
+Or, if you're already logged into the box, every script under
+`scripts/` can also be run standalone:
 ```
 sudo bash scripts/04-firewall.sh
 ```
